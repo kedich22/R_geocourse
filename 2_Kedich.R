@@ -1,5 +1,4 @@
 #создание исходного датафрейма 
-
 num <- c(1:7)
 city <- c('Орел', 'Калуга', 'Серпухов', 'Коломна',
           'Рязань', 'Муром', 'Нижний Новгород')
@@ -13,19 +12,27 @@ level <- c(146.31, 116.72, 107.54, 100.26, 93.41, 73.27, 62)
 cities <- data.frame(num, city, lat, long, head, mouth, level)
 
 #создание расчетного датафрейма
-
 lat <- lat * pi / 180
 long <- long * pi / 180
 
 sections <- data.frame("1st" = 1:6, "2nd" = 2:7, "drop" = -(cities$level[1:6] - cities$level[2:7]),
                        "dec" = (cities$level[1:6] - cities$level[2:7]) / (cities$head[2:7] - cities$head[1:6]),
-                       "tort" = (cities$head[2:7] - cities$head[1:6]) / 
+                       "sinus" = (cities$head[2:7] - cities$head[1:6]) / 
                          (6371 * (acos(sin(lat[1:6]) * sin(lat[2:7]) + cos(lat[1:6])
-                                      * cos(lat[2:7]) * cos(long[2:7] -long[1:6]))))) 
+                                      * cos(lat[2:7]) * cos(long[2:7] - long[1:6]))))) 
 
 #расчет городов
 a <-as.numeric(readline("Введите расстояние: "))
-idx <- match(T, head > a)
+b <- vector(length = 7)
+for (i in 1:length(cities$head)) {
+  if (a > cities$head[i]) {
+    b[i] <- F 
+  }
+  else {
+    b[i] <- T
+  }
+} 
+idx <- match(T, b)
 two <- cities$city[idx]
 one <- cities$city[idx-1]
 
