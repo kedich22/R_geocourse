@@ -33,7 +33,7 @@ one <- cities$city[idx-1]
 
 #расчет высоты
 newlev <- (cities$head[idx-1] - a) * (cities$level[idx] - cities$level[idx-1]) / (cities$head[idx] - cities$head[idx-1])
-newlev <- cities$level[idx-1] + newlev
+newlev <- cities$level[idx-1] - newlev
 
 #вывод результатов
 cat("Вы находитесь между городами ", one,' и ', two, ", пройдено ", round(a / 1500 * 100), "% маршрута, ваша примерная высота - ", round(newlev), " м.", sep = "")
