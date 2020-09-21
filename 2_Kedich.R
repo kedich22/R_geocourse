@@ -22,15 +22,10 @@ sections <- data.frame("1st" = 1:6, "2nd" = 2:7, "drop" = -(cities$level[1:6] - 
                                       * cos(lat[2:7]) * cos(long[2:7] - long[1:6]))))) 
 
 #расчет городов
-a <-as.numeric(readline("Введите расстояние: "))
+a <- as.numeric(readline("Введите расстояние: "))
 b <- vector(length = 7)
 for (i in 1:length(cities$head)) {
-  if (a > cities$head[i]) {
-    b[i] <- F 
-  }
-  else {
-    b[i] <- T
-  }
+  ifelse(a > cities$head[i], b[i] <- F, b[i] <- T)
 } 
 idx <- match(T, b)
 two <- cities$city[idx]
