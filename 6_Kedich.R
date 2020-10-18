@@ -38,7 +38,7 @@ ggplot(parent_mat, mapping = aes(x = '', y = P, fill = pmorigin)) +
   labs(fill = 'Origin') +
   ggtitle('Empirical probability for parent materal origin') +
   theme(axis.title = element_blank(),
-        axis.text = element_text(size = 8)) +
+        axis.text = element_text(size = 7)) +
   guides(fill = guide_legend(keyheight = 0.9, keywidth = 0.9)) 
 #При сохранении в нормльном разрешении получается график как на примере
 
