@@ -1,0 +1,43 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, message = FALSE, echo = F}
+library(tidyverse)
+knitr::opts_chunk$set(echo = F)
+```
+
+
+## Тестирование возможностей
+
+Описательные статистики по таблице `quakes`:
+```{r}
+summary(quakes)
+```
+
+
+Ниже приведена диаграмма рассеяния
+магнитуды землетрясений
+```{r, echo = FALSE}
+data(quakes)
+plot(quakes$depth, quakes$mag)
+```
+ctrl+alt+i
+Выведем данные по землетрясениям:
+
+```{r}
+data(quakes)
+print(quakes)
+```
+
+То же самое средствами ggplot:
+
+```{r, }
+ggplot(quakes,
+       mapping = aes(x = depth, y = mag)) +
+  geom_point()
+```
+

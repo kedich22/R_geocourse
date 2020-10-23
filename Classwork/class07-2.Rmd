@@ -1,0 +1,37 @@
+---
+title: "Class_07-2"
+author: "Andrei Kedich"
+date: "20 10 2020"
+output: html_document
+---
+
+Подключение библиотек:
+```{r}
+library(tidyverse)
+library(googlesheets4)
+```
+
+Загрузка данных:
+```{r}
+water = read_sheet('1qpvu21VCsvz-hYu5s1h0fc-3mRpxvsF1Y2M0Ie3d3CU')
+```
+```{r}
+agro = read_sheet('1HfJ-OOtGBWUnlp1vus8p2n8lXusowsNWflyqMHfXHCI') %>% 
+  select(Country, `2002`)  %>%  
+  mutate(`2002` = as.numeric(sapply(`2002`, function(x) {
+    if (is.null(x)) return(NA)
+        else return(x)
+  })))
+
+tab = left_join(water, agro, by = 'Country') %>% 
+ rename(water = 2, agro = 3) %>% 
+  mutate(agro = as.numeric(agro)) %>% 
+  filter(!is.na(water), !is.na(agro))
+```
+
+Диаграмма рассеяния:
+```{r}
+ggplot(tab, mapping = aes(x = water, y = agro)) +
+  geom_point()
+```
+
