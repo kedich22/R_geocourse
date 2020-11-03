@@ -1,0 +1,88 @@
+library(tidyverse)
+library(circular)
+library(readxl)
+library(NPCirc)
+library(pracma)
+
+pizhma <- read_xlsx('hydro_dirs.xlsx') %>% 
+  filter(dem == 'Пижма') %>% 
+  mutate(dir = circular(dir, 
+                        units = 'degrees', 
+                        zero = pi/2,
+                        rotation = 'clock'))
+
+ilin <- read_xlsx('hydro_dirs.xlsx') %>% 
+  filter(dem == 'Илин-Эселях') %>% 
+  mutate(dir = circular(dir,
+                        units = 'degrees', 
+                        zero = pi/2, 
+                        rotation = 'clock'))
+
+
+
+plot_directions = function(dirs, title) {
+  kden = kern.den.circ(dirs)
+  
+  peak = findpeaks(kden$y, sortstr = T)[1,2]
+  peak2 = findpeaks(kden$y, sortstr = T)[2,2]
+  modal = kden$x[peak]
+  modal = ifelse(modal < 0, 360 + modal, modal)
+  modal2 = kden$x[peak2]
+  modal2 = ifelse(modal2 < 0, 360 + modal2, modal2)  
+  
+  # раскладываем на составляющие для отрисовки линии
+  xp = sin(pi * modal / 180)
+  yp = cos(pi * modal / 180)
+  xp2 = sin(pi * modal2 / 180)
+  yp2 = cos(pi * modal2 / 180)
+  
+  
+  plot.circular(dirs, 
+                pch = 19,
+                cex = 0.03,
+                stack = TRUE, 
+                sep = 0.01,
+                axes = FALSE,
+                shrink = 1,
+                tol = 0.02,
+                main = title)
+  
+  rose.diag(dirs,
+            bins = 24, 
+            col = 'gray70',
+            border = 'gray30',
+            prop = 2,
+            add = TRUE,
+            shrink = 1,
+            tick = FALSE,
+            lwd = 1)
+  
+  lines(kden, shrink = 3, 
+        join = F, col = 'steelblue')
+  
+  lines(c(0, xp), c(0, yp),
+        lwd = 2, col = 'orangered')
+  
+  lines(c(0, xp2), c(0, yp2),
+        lwd = 1, col = 'blue')
+  
+  text(x = 1.4 * xp, y = 1.4 * yp, 
+       col = 'orangered',
+       labels = paste0(round(modal, 0), '°'))
+  
+  text(x = 1.4 * xp2, y = 1.4 * yp2, 
+       col = 'blue',
+       labels = paste0(round(modal2, 0), '°'))
+  
+  legend('topright', c('Основное', 'Второстепенное'),
+                       col = c('orangered', 'blue'), lwd = c(2,1), 
+         title = 'Направление течения',
+         bty = 'n',
+         text.width = strwidth('Основное')/3,
+         title.adj = 0.8,
+         y.intersp = 0.8,
+         cex = 1.2)
+}
+
+plot_directions(ilin$dir, 'Илин-Эсселях')
+plot_directions(pizhma$dir, 'Пижма')
