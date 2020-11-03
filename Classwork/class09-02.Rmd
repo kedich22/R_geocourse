@@ -1,0 +1,48 @@
+---
+title: "Class09-2"
+author: "Andrei Kedich"
+date: "03 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(stars)
+library(raster)
+library(mapview)
+library(tidyverse)
+```
+
+Создание точек
+```{r}
+data(storms)
+
+pts = storms %>% 
+  filter(name == 'Doris', year == 1975) %>% 
+  arrange(month, day, hour) %>% 
+  st_as_sf(coords = c('long', 'lat'),
+           crs = 4326,
+           remove = F)
+track = st_coordinates(pts) %>% 
+  st_linestring() %>% 
+  st_sfc(crs = 4326)
+
+mapview(track, color = 'black') + mapview(pts, cex = 'wind', zcol = 'pressure')
+```
+
+То же самое через ggplot
+
+```{r}
+box = st_bbox(track) %>% 
+  st_as_sfc() %>% 
+  st_buffer(2.5) %>% 
+  st_bbox()
+
+ggplot() +
+  geom_sf(data = track) +
+  geom_sf(data = pts, mapping = aes(color = pressure, size = wind)) +
+  xlim(box[1], box[3]) +
+  ylim(box[2], box[4])
+```
+

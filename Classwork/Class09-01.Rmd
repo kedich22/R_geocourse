@@ -1,0 +1,42 @@
+---
+title: "Пространственные данные"
+author: "Andrei Kedich"
+date: "03 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(stars)
+library(raster)
+library(mapview)
+library(tidyverse)
+```
+
+Создание пространственных объектов
+
+```{r}
+data(quakes)
+pts = st_as_sf(quakes, 
+               coords = c('long', 'lat'),
+               remove = F,
+               crs = 4326)
+```
+
+Визуализация точек
+
+```{r}
+plot(pts['depth'])
+plot(pts %>% st_geometry())
+grid()
+```
+Интерактивная визуализация точек
+
+```{r}
+mapview(pts, zcol = 'mag', cex = 'depth')
+```
+
+
+
+

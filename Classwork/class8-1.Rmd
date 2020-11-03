@@ -1,0 +1,81 @@
+---
+title: "Линеаментный анализ"
+author: "Andrei Kedich"
+date: "27 10 2020"
+output: html_document
+---
+
+```{r, setup, include=F}
+knitr::opts_chunk$set(echo = T)
+library(tidyverse)
+library(circular)
+library(readxl)
+library(NPCirc)
+library(pracma)
+```
+
+
+```{r}
+faults <- read_xlsx('gem_faults.xlsx') %>% 
+  mutate(cdir = circular(dir, 
+                         units = 'degrees',
+                         zero = pi/2,
+                         rotation = 'clock')) 
+baikal = faults %>% 
+  filter(catalog_na != 'EMME')
+caucasus = faults %>% 
+  filter(catalog_na == 'EMME')
+
+summary(baikal$cdir)
+summary(caucasus$cdir)
+```
+Визуализация:
+
+```{r}
+plot_directions = function(dirs, title, subtitle) {
+  kden = kern.den.circ(dirs)
+  peak = findpeaks(kden$y, sortstr = T)[1,2] 
+  # находим индекс самого высокого пика плотности распределения
+  
+  modal = kden$x[peak] # извлекаем сам угол
+  modal = ifelse(modal < 0, 360 + modal, modal)
+  
+  # раскладываем на составляющие для отрисовки линии
+  xp = sin(pi * modal / 180)
+  yp = cos(pi * modal / 180)
+  
+  plot.circular(dirs, 
+       cex = 0.5, 
+       stack = TRUE, 
+       sep = 0.035,
+       axes = FALSE,
+       main = title,
+       sub = subtitle)
+  
+  rose.diag(dirs, 
+            bins = 24, 
+            col = 'gray70',
+            border = 'gray30',
+            prop = 2, 
+            add = TRUE, 
+            tick = FALSE,
+            lwd = 0.5)
+  
+  lines(kden, shrink = 3, 
+        join = F, col = 'steelblue')
+  
+  lines(c(0, xp), c(0, yp),
+        lwd = 2, col = 'orangered')
+  
+  text(x = 1.4 * xp, y = 1.4 * yp, 
+       col = 'orangered',
+       labels = paste0(round(modal, 0), '°')) 
+       # приводим к целым градусам 
+}
+
+plot_directions(c(baikal$cdir, baikal$cdir + 180), 'Направление активных разломов', 'Байкальская рифтовая зона')
+plot_directions(c(caucasus$cdir, caucasus$cdir + 180), 'Направление активных разломов', 'Кавказ')
+```
+
+
+

@@ -1,0 +1,39 @@
+---
+title: "Class8-3"
+author: "Andrei Kedich"
+date: "27 10 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(trend)
+```
+
+```{r}
+tab = read.csv('Mezen.csv') %>% 
+  
+```
+
+```{r}
+ggplot(tab, mapping = aes(Year1, Wpol2)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth(span = 0.2) +
+  geom_smooth(method = 'lm', color = 'red')
+
+ggplot(tab, mapping = aes(Year1, Wy)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth(span = 0.2) +
+  geom_smooth(method = 'lm', color = 'red')
+```
+
+```{r}
+(mk = mk.test(tab$Wpol2))
+(pt = pettitt.test(tab$Wpol2))
+(ts = sens.slope(tab$Wpol2))
+```
+
+

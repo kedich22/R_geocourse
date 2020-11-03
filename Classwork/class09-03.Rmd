@@ -1,0 +1,70 @@
+---
+title: "class09-03"
+author: "Andrei Kedich"
+date: "03 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(sf)
+library(stars)
+library(raster)
+library(mapview)
+library(tidyverse)
+```
+
+Извлечение содержимого из базы пространственных данных
+
+```{r}
+st_layers('Satino.gpkg')
+
+hydro_lines = st_read('Satino.gpkg', 'WaterLine')
+hydro_polys = st_read('Satino.gpkg', 'WaterPolygon')
+roads = st_read('Satino.gpkg', 'Roads')
+forest = st_read('Satino.gpkg', 'ForestBorders')
+contours = st_read('Satino.gpkg', 'ContoursBasic')
+
+dem = read_stars('Satino_DEM.tif')
+
+```
+Визуализация данных
+
+```{r}
+
+mapview(forest) +
+  mapview(hydro_lines) +
+  mapview(roads) +
+  mapview(forest)
+
+plot(dem)
+```
+
+Карта через обычный плот
+
+```{r}
+plot(forest %>% st_geometry(), col = 'darkolivegreen2', border = F,
+     axes = TRUE)
+plot(contours, col = 'brown', add = TRUE)
+plot(hydro_lines, col = 'blue', add = TRUE)
+plot(hydro_polys, col = 'lightblue', border = 'blue', add = TRUE)
+plot(roads, col = 'orangered', add = TRUE)
+```
+
+Карта через ggplot
+
+```{r}
+ggplot() +
+  geom_stars(data = dem) +
+  geom_sf(data = forest, fill = 'darkolivegreen2', color = NA) +
+  geom_sf(data = contours, color = 'brown', size = 0.2) +
+  geom_sf(data = hydro_lines, color = 'blue') +
+  geom_sf(data = hydro_polys, color = 'blue', fill = 'lightblue', size = 0.2) +
+  geom_sf(data = roads, color = 'orangered') +
+  theme_bw()
+```
+
+
+
+
