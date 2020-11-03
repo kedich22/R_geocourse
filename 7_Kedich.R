@@ -20,14 +20,16 @@ filter_data_night <- filter_data %>%
   filter(hour(Datetime) == 0 | hour(Datetime) == 3)
 
 ggplot(filter_data, mapping = aes(Datetime, `T`, color = NAME)) +
-  geom_point() +
+  geom_point(alpha = 0.1) +
+  geom_density_2d() +
   ggtitle('Плотности распределения температур на станциях "Малое Сараево", "Балчуг"') +
   ylab('C°') +
   xlab('Месяц') +
   labs(color = 'Метеостанция')
 
 ggplot(filter_data_night, mapping = aes(Datetime, `T`, color = NAME)) +
-  geom_point() +
+  geom_point(alpha = 0.5) +
+  geom_density_2d() +
   ggtitle('Плотности распределения ночных температур на станциях "Малое Сараево", "Балчуг"') +
   ylab('C°') +
   xlab('Месяц') +
@@ -57,11 +59,17 @@ t.test(filter_data_night %>% filter(ID == 27605) %>% pull(`T`),
 var.test(filter_data_night %>% filter(ID == 27605) %>% pull(`T`), 
          filter_data_night %>% filter(ID == 27518) %>% pull(`T`))
 
-dif_df <- data.frame(Datetime = filter_data %>% filter(ID == 27605) %>% pull(Datetime)) %>% 
-  mutate(temp_dif = (filter_data %>% filter(ID == 27605) %>% pull(`T`) -
-         filter_data %>% filter(ID == 27518) %>% pull(`T`))) %>% 
+dif_df = inner_join(filter_data %>% 
+                          select(Datetime, `T`, ID, NAME) %>% 
+                          filter(ID == 27605),
+                          filter_data %>% 
+                          select(Datetime, `T`, ID, NAME) %>% 
+                          filter(ID == 27518),
+                          by = 'Datetime') %>% 
+  mutate(temp_dif = `T.x` - `T.y`) %>% 
+  select(Datetime, temp_dif) %>% 
   inner_join(meteo_data %>% group_by(Datetime) %>% summarise(mean_wind_spd = round(mean(Wspd, na.rm = T), 2)))
-  
+
 dif_df_night <- dif_df %>% 
   filter(hour(Datetime) == 0 | hour(Datetime) == 3)
 
@@ -93,7 +101,7 @@ ggplot(dif_df_night, mapping = aes(log10(mean_wind_spd), temp_dif)) +
   xlab(expression('log'[10]*'(Скорость ветра), м/с')) +
   ylab('Разница температур, C°')  
 
-cor.test(log10(dif_df$mean_wind_spd), dif_df$temp_dif)
+cor.test(log10(dif_df2$mean_wind_spd), dif_df2$temp_dif)
 
 cor.test(log10(dif_df_night$mean_wind_spd), dif_df_night$temp_dif)
 
