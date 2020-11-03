@@ -52,8 +52,9 @@ print(filter_data_night)
 Построение графика плотности распределения температур:
 ```{r}
 ggplot(filter_data, mapping = aes(Datetime, `T`, color = NAME)) +
-  geom_point() +
-  ggtitle('Плотности распределения температур\n на станциях "Малое Сараево", "Балчуг"') +
+  geom_point(alpha = 0.1) +
+  geom_density_2d() +
+  ggtitle('Плотности распределения температур на станциях "Малое Сараево", "Балчуг"') +
   ylab('C°') +
   xlab('Месяц') +
   labs(color = 'Метеостанция')
@@ -64,8 +65,9 @@ ggplot(filter_data, mapping = aes(Datetime, `T`, color = NAME)) +
 Построение графика плотности распределения ночных температур:
 ```{r}
 ggplot(filter_data_night, mapping = aes(Datetime, `T`, color = NAME)) +
-  geom_point() +
-  ggtitle('Плотности распределения ночных температур\nна станциях "Малое Сараево", "Балчуг"') +
+  geom_point(alpha = 0.5) +
+  geom_density_2d() +
+  ggtitle('Плотности распределения ночных температур на станциях "Малое Сараево", "Балчуг"') +
   ylab('C°') +
   xlab('Месяц') +
   labs(color = 'Метеостанция')
@@ -137,11 +139,16 @@ var.test(filter_data_night %>% filter(ID == 27605) %>% pull(`T`),
 
 Создание и преобразование датафрейма разниц температур на основе ранее скачанных данных, добавление столбцы со средней скоростью ветра:
 ```{r, message = F, warning = F}
-dif_df <- data.frame(Datetime = filter_data %>% filter(ID == 27605) %>% pull(Datetime)) %>% 
-  mutate(temp_dif = (filter_data %>% filter(ID == 27605) %>% pull(`T`) -
-         filter_data %>% filter(ID == 27518) %>% pull(`T`))) %>% 
+dif_df = inner_join(filter_data %>% 
+                          select(Datetime, `T`, ID, NAME) %>% 
+                          filter(ID == 27605),
+                          filter_data %>% 
+                          select(Datetime, `T`, ID, NAME) %>% 
+                          filter(ID == 27518),
+                          by = 'Datetime') %>% 
+  mutate(temp_dif = `T.x` - `T.y`) %>% 
+  select(Datetime, temp_dif) %>% 
   inner_join(meteo_data %>% group_by(Datetime) %>% summarise(mean_wind_spd = round(mean(Wspd, na.rm = T), 2)))
-head(dif_df)
 ```
 
 Фильтрация и создание датафрейма с ночными температурами:
@@ -204,14 +211,14 @@ ggplot(dif_df_night, mapping = aes(log10(mean_wind_spd), temp_dif)) +
 cor.test(log10(dif_df$mean_wind_spd), dif_df$temp_dif)
 ```
 
-На основе полученных данных можно сказать что величины имеют незначительную обратную связь, так как значение всего -0.41.
+На основе полученных данных можно сказать что величины имеют значительную обратную связь, так как значение всего -0.74.
 
 Проведение корреляционного теста для ночной выборки:
 ```{r}
 cor.test(log10(dif_df_night$mean_wind_spd), dif_df_night$temp_dif)
 ```
 
-Выявлена незначительная обратная связь. Можно отметить, что в ночное время связь менее значительна (-0.33).
+Выявлена незначительная обратная связь. Можно отметить, что в ночное время связь более значительна (-0.79).
 
 Получение модели линейной регрессии:
 ```{r, message = F}
