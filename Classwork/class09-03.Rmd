@@ -46,7 +46,7 @@ plot(dem)
 ```{r}
 plot(forest %>% st_geometry(), col = 'darkolivegreen2', border = F,
      axes = TRUE)
-plot(contours, col = 'brown', add = TRUE)
+plot(contours, col = 'brown', add = TRUE, lwd = 0.2)
 plot(hydro_lines, col = 'blue', add = TRUE)
 plot(hydro_polys, col = 'lightblue', border = 'blue', add = TRUE)
 plot(roads, col = 'orangered', add = TRUE)
@@ -58,7 +58,7 @@ plot(roads, col = 'orangered', add = TRUE)
 ggplot() +
   geom_stars(data = dem) +
   geom_sf(data = forest, fill = 'darkolivegreen2', color = NA) +
-  geom_sf(data = contours, color = 'brown', size = 0.2) +
+  geom_sf(data = contours, color = 'brown', size = 0.1) +
   geom_sf(data = hydro_lines, color = 'blue') +
   geom_sf(data = hydro_polys, color = 'blue', fill = 'lightblue', size = 0.2) +
   geom_sf(data = roads, color = 'orangered') +

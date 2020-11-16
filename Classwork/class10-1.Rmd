@@ -1,0 +1,54 @@
+---
+title: "Class10-1"
+author: "Andrei Kedich"
+date: "10 11 2020"
+output: html_document
+---
+
+```{r}
+library(sf)
+library(tmap)
+library(tidyverse)
+library(rnaturalearth)
+library(mapview)
+```
+
+Задание 1:
+
+Используя возможности пакетов rnaturalearth и tmap, создайте карту мира, в которой страны раскрашены в соответствии с континентом (переменная continent). Визуализируйте ее в статичном и интерактивном режиме.
+
+Решение:
+
+```{r}
+ocean = ne_download(scale = 110, 
+                    type = 'ocean', 
+                    category = 'physical',
+                    returnclass = 'sf')
+countries = ne_download(scale = 110, 
+                    type = 'countries', 
+                    category = 'cultural',
+                    returnclass = 'sf') %>% 
+  mutate(POP_EST = as.numeric(POP_EST))
+
+```
+
+Визуализация 
+```{r}
+countries_p = st_transform(countries, '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')
+
+ocean_p = st_transform(ocean, '+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs')
+
+tm_shape(ocean_p) +
+  tm_polygons(col = 'azure') +
+tm_shape(countries_p) +
+  tm_polygons('CONTINENT') + 
+  tm_bubbles('POP_EST', col = 'coral', alpha = 0.5) +
+  tm_layout(frame = FALSE,
+          legend.outside = TRUE,
+          legend.outside.position = 'right',
+          legend.bg.color = 'white')
+
+```
+
+
+

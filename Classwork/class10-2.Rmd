@@ -1,0 +1,69 @@
+---
+title: "class10-2"
+author: "Andrei Kedich"
+date: "10 11 2020"
+output: html_document
+---
+Используя слои ocean и land из масштаба 110 данных Natural Earth, разделите ее на два растра, отвечающих за рельефа суши и моря соответственно. Подберите для них классификации и создайте физическую карту мира, которая будет содержать помимо рельефа также основные объекты гидрографии.
+
+
+Подключение библиотек
+```{r}
+library(sf)
+library(tmap)
+library(tidyverse)
+library(rnaturalearth)
+library(stars)
+library(classInt)
+```
+
+Загрузка данных
+```{r}
+dem = read_stars('gebco.tif')
+
+options("download.file.method" = "libcurl")
+
+ocean = ne_download(scale = 110, 
+                    type = 'ocean', 
+                    category = 'physical')
+land = ne_download(scale = 110, 
+                    type = 'land', 
+                    category = 'physical',
+                    returnclass = 'sf')
+
+```
+
+Обрезка ЦМР:
+```{r}
+dem_land = dem[land]
+dem_ocean = dem[ocean]
+```
+
+Построение шкал, визуализация: 
+```{r}
+nclasses = 20
+land_intervals = classIntervals(as.vector(dem_land[[1]]), n = nclasses, style = "quantile")
+
+land_ramp = colorRampPalette(c("darkcyan", "palegreen4", 'lightyellow', 'sandybrown', 'sienna2', 'indianred3', 'white'))
+
+ocean_intervals = classIntervals(as.vector(dem_ocean[[1]]), n = nclasses, style = "quantile")
+
+ocean_ramp = colorRampPalette(c('midnightblue', 'skyblue4', 'azure'))
+
+
+
+plot(intervals, pal = ramp(nclasses), cex=0.5)
+```
+
+```{r}
+tm_shape(dem_land) +
+    tm_raster('gebco.tif',
+              breaks = land_intervals$brks,
+              palette = land_ramp(nclasses)) +
+tm_shape(dem_ocean) +
+    tm_raster('gebco.tif',
+              breaks = ocean_intervals$brks,
+              palette = ocean_ramp(nclasses))
+  
+```
+
