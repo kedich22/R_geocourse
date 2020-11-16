@@ -1,0 +1,83 @@
+---
+title: "Задание 9"
+author: "Andrei Kedich"
+date: "09 11 2020"
+output: html_document
+---
+Подлкючение необходимых библиотек:
+```{r,message=FALSE}
+library(sf)
+library(stars)
+library(raster)
+library(tidyverse)
+library(units)
+```
+
+Загрузка данных:
+```{r}
+route = read.csv('route.csv') %>% 
+  st_as_sf(coords = c('X', 'Y'))
+route_line = st_coordinates(route) %>% 
+  st_linestring() %>% 
+  st_sfc(crs = 4326)
+
+st_fin_points = rbind(head(route, n = 1), tail(route, n = 1)) %>% 
+  mutate(Name = c('Начало маршрута', 'Конец маршрута')) %>% 
+  select(Name, geometry)
+  
+
+field = read.csv('field.csv') %>% 
+  st_as_sf(coords = c('X', 'Y'),
+           crs = 4326) %>% 
+  st_coordinates() %>% 
+  st_linestring() %>% 
+  st_sfc(crs = 4326) %>% 
+  st_node() %>% 
+  st_polygonize() 
+
+
+stations = read.csv('stations.csv', encoding = 'UTF-8') %>% 
+  st_as_sf(coords = c('X', 'Y')) %>% 
+  select(Name, geometry)
+
+
+image = stack('Snimok.tif')
+
+
+```
+Репроецирование данных:
+```{r, message = F}
+st_crs(stations) = st_crs(4326)[[2]]
+st_crs(st_fin_points) = st_crs(4326)[[2]]
+
+newproj = st_crs(image)[[2]] 
+              
+route_line = st_transform(route_line, newproj)
+field = st_transform(field, newproj)
+st_fin_points = st_transform(st_fin_points, newproj)
+stations = st_transform(stations, newproj)
+```
+
+Построение и экспорт карты:
+```{r,message = F}
+area = as.numeric(round(set_units(st_area(field), ha, allow_mixed = T), 1))
+centr = st_centroid(field) %>% st_geometry()
+box = st_bbox(image) %>% 
+  st_as_sfc()
+
+png('FieldMap.png', width = 650, height = 650)
+plot(st_geometry(box), graticule = T, axes = T, main = 'Карта полевых работ')
+plotRGB(image, add = T)
+plot(field, col = adjustcolor('green', alpha = 0.5), add = T)
+plot(route_line, col = 'yellow', lwd = 2, add = T)
+plot(stations, pch = 22, col = 'black', bg = 'white', cex = 2, add = T)
+plot(st_fin_points, pch = 21, col = 'red', bg = 'yellow', cex = 1.5, add = T)
+text(x = c(stations$geometry[[1]][1], stations$geometry[[2]][1]), y = c(
+  stations$geometry[[1]][2], stations$geometry[[2]][2]), labels = stations$Name, pos = 1, col = 'white')
+text(x = c(st_fin_points$geometry[[1]][1], st_fin_points$geometry[[2]][1]), y = c(st_fin_points$geometry[[1]][2], st_fin_points$geometry[[2]][2]), labels = st_fin_points$Name, col = 'white', cex = 0.8, pos = 4)
+text(x = centr[[1]][1], y = centr[[1]][2], labels = c('Пашня\n\n', area,'\n\nга'), cex = 0.9)
+scalebar(divs = 2, below = 'м', type = 'bar', d = 1000)
+dev.off()
+```
+
+
