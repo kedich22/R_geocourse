@@ -1,0 +1,71 @@
+---
+title: "class11-1"
+author: "Andrei Kedich"
+date: "17 11 2020"
+output: html_document
+---
+
+
+## Задание 
+
+Проанализируйте пространственную ассоциацию подтипов почв с типами рельефа данным ГИС Сатино. Для этого выполните оверлей между слоями RelTypes и SoilTypes методом st_intersection(). Для каждого подтипа почв рассчитайте долю, которая занята в его площади каждым типом рельефа. Визуализируйте результаты средствами ggplot2 в виде столбчатой диаграммы, где каждый столбик отвечает за подтип почвы, а его внутреннее разделение соответствует долям типов рельефа. Используя функцию cramerV() из пакета rcompanion, рассчитайте коэффициент ассоциации Крамера, чтобы охарактеризовать силу ассоциации между этими номинальными переменными.
+
+Подключение библиотк
+```{r, message=F}
+library(sf)
+library(tidyverse)
+library(rcompanion)
+library(RColorBrewer)
+```
+
+Чтение данных
+```{r}
+relief = st_read('Satino.gpkg', 'RelTypes' ) %>%  
+  select(RelType, ID)
+
+soils = st_read('Satino.gpkg', 'SoilTypes' ) %>% 
+  transmute(SoilIndex, SoilSubType = paste(SoilType, SoilSubtype, sep = ' / '))
+
+plot(relief['RelType'])
+```
+
+
+Анализ, оверлей
+```{r}
+inters = st_intersection(soils, relief) %>% 
+  mutate(area = st_area(.)) %>%  # точка показывает допольнительное место куда подается при пайп-операторе 
+  group_by(SoilSubType, SoilIndex, RelType, ID) %>% 
+  summarise(area = sum(area)) %>% 
+  ungroup() %>% 
+  group_by(SoilSubType) %>% 
+  mutate(rel_ratio = as.vector(100 * area / sum(area)))
+
+  
+
+```
+Визуализация
+```{r}
+n = length(unique(inters$RelType))
+colors = c(brewer.pal(n/2, 'Set3'), brewer.pal(n - n / 2, 'Set1'))
+ggplot(inters, mapping = aes(x = SoilIndex, y = rel_ratio, fill = abbreviate(RelType, 12))) +
+  geom_col(position = 'fill') +
+  scale_fill_manual(values =  colors) +
+  coord_flip()
+```
+
+Построение таблицы сопряженности
+Расчет показателей ассоциации
+
+```{r}
+mat = inters %>% 
+  ungroup() %>% 
+  st_drop_geometry() %>% 
+  select(SoilIndex, ID, rel_ratio) %>% 
+  pivot_wider(names_from = ID, values_from = rel_ratio, values_fill = 0) %>% 
+  select(-1) %>% 
+  as.matrix()
+
+cramerV(mat) #тест Крамера - мера ассоциации (есть множество других) категориальные данные
+```
+
+
