@@ -1,0 +1,72 @@
+---
+title: "Class_14-1"
+author: "Timofey Samsonov"
+date: "15 12 2020"
+output: html_document
+---
+
+## Подключение библиотек
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, collapse = TRUE, echo = FALSE, fig.align="left")
+library(tidyverse)
+library(tmap)
+library(sf)
+library(spdep)
+library(stars)
+library(spatialreg)
+library(GWmodel)
+```
+
+## Географически взвешенная регрессия
+
+В качестве примера проанализируем каким образом цена жилья зависит от количества комнат на примере данных по стоимости недвижимости в Бостоне, доступных на [данном сайте](https://www.jefftk.com/apartment_prices/data-listing), и выгруженных с североамериканского информационного портала недвижимости [padmapper.com](https://www.padmapper.com/apartments/boston-ma?box=-71.2297689,42.2745193,-70.9215169,42.4531515):
+
+```{r}
+realest = read_delim(url('https://www.jefftk.com/apartment_prices/apts-1542637382.txt'),
+                 delim = ' ',
+                 col_names = c('price', 'rooms', 'id', 'lon', 'lat')) %>%
+  st_as_sf(coords = c('lon', 'lat'), crs = 4326) %>%
+  st_transform(3395)
+
+tmap_mode('view')
+tm_shape(realest) +
+  tm_bubbles(col = 'price',
+             size = 'rooms',
+             style = 'fixed',
+             breaks = c(0, 1000, 2000, 3000, 4000, 5000, 10000, max(realest$price)),
+             scale = 0.5,
+             palette = colorRampPalette(c('steelblue4', 'orange', 'darkred'))(7),
+             alpha = 0.8) +
+  tm_view(symbol.size.fixed = TRUE)
+```
+
+Линейная регрессия:
+```{r}
+model = lm(price ~ rooms, data = realest)
+summary(model)
+```
+
+Для того чтобы оценить пространственую неравномерность реакции стоимости жилья на увеличение количества комнат, построим модель географически взвешенной регрессии:
+```{r}
+samples = realest %>% dplyr::sample_n(1000) %>% as('Spatial')
+
+width = bw.gwr(price ~ rooms, data = samples)
+
+(gwr_res = gwr.basic(price ~ rooms, data = samples, bw = width, kernel = 'gaussian'))
+```
+
+Визуализируем результаты
+```{r}
+tm_shape(gwr_res$SDF) +
+  tm_bubbles(col = 'rooms', # это не количество комнат, а коэффициент регрессии
+             style = 'quantile',
+             scale = 0.3,
+             palette = 'Reds',
+             alpha = 0.5) +
+  tm_view(symbol.size.fixed = TRUE)
+```
+
+
+Как видно, модель GWR наглядно показывает наличие пространственной гетерогенности (неоднороности) в распределении показателя. Четко видны районы (в основном цеентральные, но также и часть окраинных), где стоимость жилья резко возрастает при увеличении количества комнат.

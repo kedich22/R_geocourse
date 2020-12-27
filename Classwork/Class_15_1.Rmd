@@ -1,0 +1,161 @@
+---
+title: "Spatial Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tmap)
+library(sf)
+library(spdep)
+library(stars)
+library(spatialreg)
+library(spData)
+library(mapview)
+```
+
+## Пространственная регрессия
+
+### Загрузка и визуализация данных
+
+Загружаем данные по преступности в городе Колумбус, штата Огайо, США из пакета spData (https://geodacenter.github.io/data-and-lab//columbus/):
+```{r}
+reg = st_read(system.file("shapes/columbus.shp", package="spData")[1])
+```
+
+Исследуем переменные по уровню преступности, стоимости жилья, уровню дохода:
+```{r}
+plot(reg[c('CRIME','INC','HOVAL')])
+```
+
+### Обычная регрессия
+
+Построим модель, связывающую уровень преступности с уровнем дохода и стоимостью жилья:
+```{r}
+model = lm(CRIME ~ INC + HOVAL, data = reg)
+summary(model)
+```
+
+Проанализируем остатки графически:
+```{r}
+reg = reg %>% 
+  mutate(res = residuals(model))
+plot(reg['res'])
+```
+
+### Определение соседства и матрицы пространственных связей
+
+Определяем соседство по методу ферзя:
+```{r}
+nb_queen = poly2nb(reg) # Соседство по правилу ферзя
+nb_queen  # посмотрим сводную информацию
+class(nb_queen)  # проверим тип объекта
+```
+
+Аналогично по методу ладьи:
+```{r}
+nb_rook = poly2nb(reg, queen = FALSE) # Соседство по правилу ладьи
+nb_rook  # посмотрим сводную информацию
+class(nb_rook)  # проверим тип объекта
+```
+
+Визуализируем результат:
+```{r, message = FALSE, results = "hide", collapse=TRUE}
+coords = reg %>% 
+  st_centroid() %>% 
+  st_coordinates()
+
+# Теперь рисуем граф:
+plot(st_geometry(reg), border = "gray50")
+plot(nb_queen, coords, pch = 19, cex = 0.5, add = TRUE)
+title(main = "Соседи по смежности (правило ферзя)")
+
+# Теперь рисуем граф:
+plot(st_geometry(reg), border = "gray50")
+plot(nb_rook, coords, pch = 19, cex = 0.5, add = TRUE)
+title(main = "Соседи по смежности (правило ладьи)")
+```
+
+Построим и визуализируем матрицу пространственных весов:
+```{r}
+Wbin = nb2listw(nb_queen, style = "B")
+M = listw2mat(Wbin)
+lattice::levelplot(M, main = "Матрица весов (бинарная)")
+```
+
+Сделаем то же самое для нормированного варианта:
+```{r}
+Wstand = nb2listw(nb_queen, style = "W")
+M = listw2mat(Wstand)
+
+ramp = colorRampPalette(c("white","red"))
+levels = 1 / 1:10  # шкала 1, 0.5, 0.33, 0.25 ... 0.1
+lattice::levelplot(M, 
+          main="Матрица весов (нормированная)", 
+          at = levels, 
+          col.regions=ramp(10))
+```
+
+### Тест на автокорреляцию
+
+Посчитаем индекс Морана для остатков:
+```{r}
+moran.test(reg$res, Wstand)
+```
+
+Гипотеза о слабоположительной автокорреляции остатков подтверждается.
+
+### Пространственная регрессия
+
+Построим модель пространственной регрессии, которая убирает автокоррелированную составляющую:
+```{r}
+spmodel = lagsarlm(CRIME ~ INC + HOVAL, data = reg, listw = Wstand)
+summary(spmodel)
+```
+
+Добавим пространственный лаг и остатки в фрейм данных, а также выполним фильтрацию исходных данных по преступности, вычтя из них лаг:
+```{r}
+reg = reg %>% 
+  mutate(spfit = fitted(spmodel),
+         splag = lag.listw(Wstand, reg$CRIME),
+         spres = residuals(spmodel),
+         FCRIME = CRIME - splag)
+```
+
+Выполним визуализацию остатков и проверим их автокорреляцию:
+```{r}
+plot(reg[c('spfit', 'splag', 'res', 'spres')])
+moran.test(reg$spres, Wstand)
+```
+
+Вычислим модель линейной регрессии между фильтрованным показателем преступности и исходными данными по доходам и стоимости жилья:
+```{r}
+model = lm(FCRIME ~ INC + HOVAL, data = reg)
+summary(model)
+```
+
+Скорректированная модель показывает, что после фильтрации наблюдается слабая корреляция со стоимостью домовладений, при этом корреляция с уровнем дохода ненадежная.
+
+### Предсказание на основе пространственной регрессии
+
+Предположим, что стоимость домовладений в некоторых районах понизилась. Как это отразится на уровне преступности?
+
+```{r}
+reg2 = reg
+reg2[25, 'HOVAL'] = 50
+reg2[36, 'HOVAL'] = 70
+
+newpred = predict(spmodel, newdata = reg2, listw = Wstand, pred.type = "TS") %>% 
+  as_tibble()
+
+reg2 = reg2 %>% 
+  mutate(newfit = newpred$fit,
+         newtrend = newpred$trend,
+         newsignal = newpred$signal)
+
+plot(reg2[c('newfit', 'newsignal')])
+plot(reg[c('spfit', 'splag')])
+
+mapview::mapview(reg2)
+```
