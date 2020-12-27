@@ -1,0 +1,101 @@
+# Творческое задание
+## Кедич Андрей
+
+### Интерполяция скоростей движения поверхностного слоя каменного глетчера Galena Creek (Wyoming, USA)
+
+
+Исходные данные: в статье "GALENA CREEK ROCK GLACIER REVISITED–
+NEW OBSERVATIONS ON AN OLD CONTROVERSY" (Potter et al., 1998) приведены данные об отмеченных скоростях движения глетчера на нескольких линииях за более чем 30-летний период. Также приведено их расположение на теле глетчера.
+
+Цель задания: методом кригинга провести интерполяцияю скоростей на все тело глетчера.
+
+Изначальные приготовления: на первом этапе на основе статьи были отбиты контуры глетчера, а также положение точек с известным измеренным показателем скорости.
+
+
+Подключение библиотек:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(sf)
+library(stars)
+library(rnaturalearth)
+library(mapview)
+library(gstat)
+library(RColorBrewer)
+library(ggspatial)
+```
+
+Загрузка данных
+```{r}
+pts = st_read('points.shp')
+border = st_read('borders_area.shp')
+```
+
+Вариограмный анализ
+```{r}
+hscat(Velocity_a~1, data = pts, c(0, 20, 50, 100, 250), pch = 19)
+```
+
+Вариограмное облако
+```{r}
+varcl = variogram(Velocity_a~1, data=pts, cutoff = 250, cloud=TRUE)
+
+ggplot(varcl) +
+  geom_point(aes(dist, gamma), alpha = 0.5, size = 2, color = 'steelblue') +
+  ylab('semivariance') +
+  theme_bw()
+```
+
+Эмпирическая вариограмма
+```{r}
+width = 20
+vargr = variogram(Velocity_a~1, data=pts, cutoff = 200, width = width)
+
+ggplot() +
+  geom_line(vargr, mapping = aes(dist, gamma)) +
+  geom_point(vargr, mapping = aes(dist, gamma, size = np)) +
+  scale_size(range = c(1, 5)) +
+  theme_bw()
+
+varmd = fit.variogram(vargr, model = vgm(psill = max(vargr$gamma)*0.9, model = 'Exp', range = max(vargr$dist)/2, nugget = 0))
+
+plot(vargr, model = varmd, cutoff = 200)
+```
+
+Построение сетки и интерполяция
+```{r}
+box = st_bbox(border)
+grid = st_as_stars(box, dx = 2, dy = 2)
+velocity_grid = krige(Velocity_a~1, pts, grid, model = varmd)[border]
+```
+
+
+Построение карты
+```{r}
+breaks = c(0,5,10,20,30,50,100)
+color = brewer.pal(6, 'YlOrRd')
+ncolors = 5
+cont = st_contour(velocity_grid['var1.pred'], breaks = breaks, contour_lines = TRUE)
+
+legend = scale_fill_manual(name = 'см/год', values = color, na.value = 'white', guide = guide_legend(label.vjust = -0.3, title.position = 'top', reverse = T), labels = c('0-5', '5-10', '10-20', '20-30', '30-50', '50-100'))
+
+ggplot() +
+  geom_stars(data = cut(velocity_grid['var1.pred'], breaks = breaks)) +
+  legend +
+  geom_sf(data = cont, color = 'black', size = 0.2) +
+  geom_sf(data = pts, color = 'black', size = 0.6) +
+  geom_sf(data = border, color = 'blue', fill = NA) +
+  theme_bw() +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.border = element_rect(fill = NA)) +
+  annotation_scale(height = unit(0.2, 'cm'), bar_cols = c('black', 'white'), pad_x = unit(1, 'cm')) +
+  ggtitle('Скорости кам. глетчера Galena Creek', subtitle = 'средние за 1963 - 1995 гг.') + labs(caption = 'Карта составлена по данным статьи Potter et al., 1998')
+
+```
+
+Решенные задачи:
+Был проведен вариограмный анализ, построено вариограмное облако и эмпирическая вариограмма. Проведена интепроляция и построена итоговая карта.
+
+Итоговый результат:
+Данный результат носит очень примерный характер, так как количество точек мало и распространено не по всему телу. Из-за этого скорости могут быть некорректны. Также сложности возникли при выборе модели вариограммы. Возможно, более корректно было бы проведение универсального кригинга с использованием также данных о крутизне склона, так как обычно скорости глетчера прямо зависят от уклона.
+
