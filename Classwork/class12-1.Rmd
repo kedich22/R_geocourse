@@ -1,0 +1,36 @@
+---
+title: "Class12-1"
+author: "Andrei Kedich"
+date: "24 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+library(raster)
+library(stars)
+library(mapedit)
+library(tidyverse)
+library(sp)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+temp = raster::getData("worldclim", var = "tmean", res = 10) %>% 
+  st_as_stars() / 10
+```
+
+```{r}
+temp_range = temp %>% 
+  st_apply(1:2, range) %>% 
+  split('range') %>% 
+  mutate(A = X2 - X1, phi = st_coordinates(.)$y,
+         K = (A - 5.4 * abs(sin(pi * phi / 100))) / A)
+```
+
+Визуализация
+
+```{r}
+plot(temp_range['K'])
+```
+
