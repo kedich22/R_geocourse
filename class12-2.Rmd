@@ -1,0 +1,77 @@
+---
+title: "class12-2"
+author: "Andrei Kedich"
+date: "24 11 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+library(raster)
+library(mapedit)
+library(tidyverse)
+library(mapview)
+library(geosphere)
+library(tmap)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Задание
+
+В пакете tmap содержится растровый каталог land, включающий в себя растр elevation. Используя пакет mapedit, оцифруйте произвольную линию и постройте средствами ggplot профиль рельефа вдоль этой линии.
+
+
+Решение
+
+```{r}
+data(land, package = 'tmap')
+plot(land['elevation'])
+```
+
+Оцифровка профиля
+```{r}
+mp = mapview()
+profile = editMap(mp)
+line = profile$drawn
+```
+
+
+Извлечение данных
+```{r}
+elevrof = raster::extract(as(land['elevation'], 'Raster'), as(line, 'Spatial'),
+                          along = TRUE, cellnumbers = TRUE)
+
+elevdf = elevrof[[1]] %>% 
+  as_tibble() %>% 
+  drop_na() %>% 
+  bind_cols(st_coordinates(land)[.$cell, ] %>% as_tibble()) %>% 
+   mutate(dist = 0.001 * c(0, dplyr::select(., x, y) %>% 
+                             geosphere::distGeo() %>% 
+                             cumsum() %>% 
+                             head(-1))) %>% 
+  rename(elevation = layer)
+  
+```
+
+Профиль
+```{r}
+ggplot(elevdf, mapping = aes(x = dist, y = elevation)) +
+  geom_line() +
+  geom_point()
+```
+
+
+Визуализация карта
+```{r}
+
+box = st_bbox(line) %>% 
+  st_as_sfc() %>% 
+  st_buffer(6) %>% 
+  st_bbox()
+  
+tm_shape(land, bbox = box) +
+  tm_raster('elevation') +
+tm_shape(line) +
+  tm_lines() 
+```
+
