@@ -1,0 +1,189 @@
+---
+title: "13_Kedich"
+author: "Andrei Kedich"
+date: "09 12 2020"
+output: html_document
+---
+# Задание №14
+=
+## Задание
+В задании необходимо различными методами построить поле распределения биомассы зоопланктона в Охотском море по информации, полученной из базы данных NASA COPEPOD (Coastal & Oceanic Plankton Ecology, Production, & Observation Database) за 1949-1951 гг.
+
+Подключение библиотек:
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(stars)
+library(raster)
+library(tidyverse)
+library(akima)
+library(gstat) 
+library(RColorBrewer)
+library(ggspatial)
+library(rnaturalearth)
+library(fields)
+options(scipen=999)
+```
+
+Чтение данных:
+```{r, message=FALSE}
+bio_names = read_csv('copepod__b400-compilation.txt', n_max = 1, skip = 3, col_names = T)
+bio = read_csv('copepod__b400-compilation.txt', skip = 5, col_names = F)
+
+bio = bio %>% 
+  select(c(-42:-46))
+
+colnames(bio) = colnames(bio_names)
+  
+sea = st_read('World_Seas_IHO_v3.shp') %>% 
+  filter(NAME == 'Sea of Okhotsk')
+
+land = ne_download(scale = 50, type = 'land', category = 'physical', returnclass = 'sf') %>% st_transform(land, crs = 4087)
+```
+
+Фильтрация данных:
+```{r}
+box = st_bbox(sea)
+
+bio_okhotsk = bio %>% 
+  filter(LATITUDE > box[2] & LATITUDE < box[4] & LONGITDE > box[1] & LONGITDE < box[3]) %>% 
+  filter(LOWER_Z <= 200) %>% 
+  filter(MON == 6 | MON == 7 | MON == 8) %>% 
+  filter(YEAR == 1949 | YEAR == 1950 | YEAR == 1951)
+  
+```
+
+Представление данных в пространственном виде и перепроецирование
+```{r}
+pts = bio_okhotsk %>% 
+  st_as_sf(coords = c('LONGITDE', 'LATITUDE'), crs = 4326) %>% 
+  st_transform(4087) %>% 
+  rename(per_vol = `VALUE-per-volu`)
+
+sea = st_transform(sea, crs = 4087)
+pts = pts[sea,]
+```
+
+Подготовка к интерполяции
+```{r}
+box_new = st_bbox(sea)
+grid = st_as_stars(box_new, dx = 10000, dy = 10000)
+
+box_new_sf = box_new %>% 
+  st_as_sfc(crs = 4087) 
+land = st_intersection(land, box_new_sf)
+```
+
+Интерполяция методом Акимы
+```{r, message=FALSE}
+coords = st_coordinates(pts)
+coords_grid = st_coordinates(grid)
+
+grid = grid %>% 
+  mutate(z_spline = interpp(x = coords[,1],
+                            y = coords[,2],
+                            z = pts$per_vol, 
+                            xo = coords_grid[,1],
+                            yo = coords_grid[,2],
+                            linear = FALSE,
+                            extrap = TRUE,
+                            duplicate = 'mean')$z)
+grid$z_spline[grid$z_spline < 0] = NA
+
+grid = grid[sea]
+```
+
+Создание карты (интерполяция методом Акимы), созданные данные также будут использованы для построения дальнейших карт
+```{r}
+val_levels = c(0, 50, 100, 200, 300, 500, 700, 1000)
+val_colors = c('aliceblue', brewer.pal(5, 'Blues'), 'turquoise4')
+
+legend = scale_fill_manual(name = 'мг/куб.м', values = val_colors, na.value = 'white', guide = guide_legend(label.vjust = -0.3, title.position = 'top', reverse = T), labels = c('0-50', '50-100', '100-200', '200-300', '300-500', '500-700', '700-1000'))
+
+cont_spline = st_contour(grid['z_spline'], breaks = val_levels, contour_lines = T)
+
+graticule = st_graticule(x = sea) 
+  
+ggplot() +
+  geom_stars(data = cut(grid['z_spline'], breaks = (val_levels))) +
+  legend +
+  geom_sf(data = cont_spline, color = 'black', size = 0.4) +
+  geom_sf(data = pts, color = 'black', size = 0.8) +
+  geom_sf(data = land, fill = 'gray90', color = 'black') +
+  geom_sf(data = graticule, linetype = 'dotted', color = 'gray30') +
+  coord_sf(expand = FALSE) +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.border = element_rect(fill = NA)) +
+  ggtitle('Биомасса зоопланктона, июнь-август, глубины 0-200 м', subtitle = 'Интерполяция на основе триангуляции, метод Акимы') +
+  annotation_scale(height = unit(0.15, 'cm'), bar_cols = c('gray', 'white'), pad_x = unit(9.0, 'cm')) +
+  labs(caption = 'Карта составлена по данным COPEPOD,\n экспедиции 1949-1951 гг.')
+```
+
+Интерполяция методом обратно взвешенных расстояний
+```{r}
+box_new = st_bbox(sea)
+grid = st_as_stars(box_new, dx = 10000, dy = 10000)
+
+grid = grid %>% 
+  mutate(z_idw2 = idw(pts$per_vol ~ 1, locations = pts, newdata = grid, idp = 2.0) %>% pull(var1.pred) %>% as('vector'))
+
+grid = grid[sea]
+
+cont_idw2 = st_contour(grid['z_idw2'], 
+                       breaks = val_levels, 
+                       contour_lines = TRUE)
+```
+
+Построение карты (интерполяция методом обратно взвешенных расстояний)
+```{r}
+ggplot() +
+  geom_stars(data = cut(grid['z_idw2'], breaks = (val_levels))) +
+  legend +
+  geom_sf(data = cont_idw2, color = 'black', size = 0.4) +
+  geom_sf(data = pts, color = 'black', size = 0.8) +
+  geom_sf(data = land, fill = 'gray90', color = 'black') +
+  geom_sf(data = graticule, linetype = 'dotted', color = 'gray30') +
+  coord_sf(expand = FALSE) +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.border = element_rect(fill = NA)) +
+  ggtitle('Биомасса зоопланктона, июнь-август, глубины 0-200 м', subtitle = 'Интерполяция методом обратно взвешенных расстояний (2 степень)') +
+  annotation_scale(height = unit(0.15, 'cm'), bar_cols = c('gray', 'white'), pad_x = unit(9.0, 'cm')) +
+  labs(caption = 'Карта составлена по данным COPEPOD,\n экспедиции 1949-1951 гг.')
+```
+
+Интерполяция методом радиальных базисных функций (сплайны с натяжением)
+```{r}
+box_new = st_bbox(sea)
+grid = st_as_stars(box_new, dx = 10000, dy = 10000)
+
+pred = Tps(coords, pts$per_vol, scale.type = 'unscaled', lambda = 0)
+grid = grid %>% 
+  mutate(z_tps = predict(pred, coords_grid))
+
+grid = grid[sea]
+
+cont_tps = st_contour(grid['z_tps'], 
+                       breaks = val_levels, 
+                       contour_lines = TRUE)
+```
+
+Построение карты (метод радиальных базисных функций)
+```{r}
+ggplot() +
+  geom_stars(data = cut(grid['z_tps'], breaks = (val_levels))) +
+  legend +
+  geom_sf(data = cont_tps, color = 'black', size = 0.4) +
+  geom_sf(data = pts, color = 'black', size = 0.8) +
+  geom_sf(data = land, fill = 'gray90', color = 'black') +
+  geom_sf(data = graticule, linetype = 'dotted', color = 'gray30') +
+  coord_sf(expand = FALSE) +
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank(),
+        panel.border = element_rect(fill = NA)) +
+  ggtitle('Биомасса зоопланктона, июнь-август, глубины 0-200 м', subtitle = 'Интерполяция методом радиальных базисных функций (сплайны с натяжением)') +
+  annotation_scale(height = unit(0.15, 'cm'), bar_cols = c('gray', 'white'), pad_x = unit(9.0, 'cm')) +
+  labs(caption = 'Карта составлена по данным COPEPOD,\n экспедиции 1949-1951 гг.')
+```
+
+Комментарий:
+
+На мой взгляж наиболее корректная интерполяция была выполнена при помощи метода радиальных базисных функций. Его минусом было то, что при интерполяции были получены отрицательные значения - поверхность выходит за пределы установленных значений. Данный метод наиболее гибок по сравнению с другими рассмотренными в этом задании. Используется сплайн минимальной кривизны, который дает поверхность с минимальной кривизной между точками. В ней отсутствуют резкие скачки, которые как раз не характерны для распределения большинства географических данных. В методе обратно взвешенных расстояний значение показателя в произвольной точке получается как средневзвешенная сумма значений в исходных точках. Веса определяются обратно пропорционально расстоянию. Данный метод критикуется из-за эффекта бычьих глаз - формируются хорошо заметные замкнутые изолинии вокруг точек. Интерполяция на основе триангуляции выглядит угловато из-за того, что в ее основе лежат интерполяция через треугольники. Данный метод наиболее простой и на мой взгляд наименее качественно отражает исследуемую картину. Использования метода Акимы позволяет получить более плавный рисунок, но в целом особенности триангуляции все равно заметны. 

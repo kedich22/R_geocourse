@@ -1,0 +1,153 @@
+---
+title: "Задание 10"
+author: "Andrei Kedich"
+date: "15 11 2020"
+output: html_document
+---
+Подключение библиотек:
+```{r, message=F}
+library(sf)
+library(tmap)
+library(tidyverse)
+library(rnaturalearth)
+library(stars)
+library(RColorBrewer)
+library(eurostat)
+```
+
+Загрузка необходимых данных (карта климатов):
+```{r}
+climates = st_read('climates.gpkg', 'climates') %>% 
+  st_transform('+proj=wag5') %>% 
+    mutate(Type = factor(Type, ordered = T, levels = c('Арктический','Субарктический', 'Умеренный', 'Субтропический', 'Тропический', 'Субэкваториальный', 'Экваториальный')))
+
+land = st_read('ne_data110.gpkg', 'land') %>% 
+  st_transform('+proj=wag5')
+ocean = st_read('ne_data110.gpkg', 'ocean') %>% 
+  st_transform('+proj=wag5')
+rivers = st_read('ne_data110.gpkg', 'rivers') %>% 
+  st_transform('+proj=wag5')
+lakes = st_read('ne_data110.gpkg', 'lakes') %>% 
+  st_transform('+proj=wag5')
+lines = st_read('ne_data110.gpkg', 'geographic_lines') %>% 
+  st_transform('+proj=wag5') %>% 
+  slice(-c(3,6))
+  
+```
+
+Построение климатической карты Алисова:
+```{r}
+tm_shape(ocean) +
+  tm_polygons(col = 'grey') +
+tm_shape(land) +
+  tm_polygons(col = 'gray90') +
+tm_shape(rivers) +
+  tm_lines(col = 'gray50') +
+tm_shape(lines) +
+  tm_lines(col = 'gray40', lty = 'longdash') +
+   tm_text('name_ru', size = 0.6, col = 'gray20', ymod = 0.3) +
+tm_shape(climates) +
+  tm_polygons(col = 'Type', alpha = 0.4, palette = c('mediumorchid', 'dodgerblue2', 'mediumseagreen', 'palegoldenrod', 'sandybrown', 'salmon', 'tomato1'), title = '') +
+  tm_graticules(ticks = F, x = seq(-150, 150, by = 30), 
+        y = seq(-60, 60, by = 30), 
+        lwd = 0.2,
+        col = "gray50",
+        labels.cardinal = F,
+        labels.show = c(T,T),
+        labels.col = 'gray30') +
+tm_layout(legend.position = c('left', 'bottom'),
+          main.title = 'Климатические пояса',
+          frame = FALSE,
+          main.title.position = 'center', 
+          main.title.size = 2,
+          legend.height = 0.23) 
+```
+
+Загрузка данных для второй карты Обезлесения в районе эстуария р.Конго:
+```{r}
+trees = read_stars('trees.tif')
+loss = read_stars('loss.tif')
+gain = read_stars('gain.tif')
+sea = read_stars('mask.tif')
+```
+Филтрация входных данных:
+```{r}
+loss$loss.tif[loss$loss.tif > 12] = NA
+loss$loss.tif[loss$loss.tif == 0] = NA
+loss$loss.tif[loss$loss.tif <= 12] = 'Обезлесение к 2012 г.' 
+
+gain$gain.tif[gain$gain.tif == 0] = NA
+gain$gain.tif[gain$gain.tif == 1] = 'Прирост леса к 2012 г.'
+sea$mask.tif[sea$mask.tif != 2] = NA
+```
+Построение итоговой карты:
+```{r}
+green = brewer.pal(5, 'Greens')
+tm_shape(trees) +
+  tm_raster(breaks = c(0, 20, 40, 60, 80, 100), palette = green, legend.reverse = T, title = '2000 г., %', legend.format = list(text.separator = '-')) +
+tm_shape(loss) +
+  tm_raster(palette = 'red', title = '') +
+tm_shape(gain) +
+  tm_raster(palette = 'blue', title = '') +
+tm_shape(sea) +
+  tm_raster(palette = 'powderblue', legend.show = F) +
+tm_layout(main.title = 'Изменение площади леса в эсутарии реки Конго (2000-2012 гг.)') +
+tm_credits(text = 'Источник: Hansen/UMD/Google/USGS/NASA', position = c('LEFT', 'BOTTOM')) +
+tm_scale_bar(breaks = c(0,5,10,15), position = c('RIGHT', 'BOTTOM'), text.size = 0.7, lwd = 0.5)
+```
+
+Загрузка данных Евростата по железнодорожному трансопрту:
+```{r}
+spatial = get_eurostat_geospatial(nuts_level = 0)
+
+railway = get_eurostat('rail_if_line_na') %>% 
+  filter(time >= as.Date('2016-01-01') & time <= as.Date('2016-01-31')) %>% 
+  filter((tra_infr == 'RL_ELC' | tra_infr == 'TOTAL') & tra_meas == 'TOTAL') 
+
+railway = full_join(railway, spatial %>% select(geo, geometry), by = 'geo')
+
+railwayNA = railway %>% 
+  filter(is.na(values)) %>% 
+  select(1,6,7) %>% 
+  mutate(electr = NA, percent = NA) %>% 
+  rename(all = values) %>% 
+  st_as_sf(crs = 4258)
+
+railsplit = split(railway, railway$tra_infr)
+
+newrail = left_join(railsplit$TOTAL, railsplit$RL_ELC %>% select(geo, values) , by = 'geo') %>%   select(-c(2,3,4,5)) %>% 
+  mutate(percent = values.y / values.x *100) %>% 
+  rename(all = values.x, electr = values.y) %>% 
+  st_as_sf(crs = 4258) %>% 
+  rbind(railwayNA)
+```
+
+Построение карты протяженности и электрификации железных дорог:
+```{r}
+box = st_polygon(list(matrix(c(
+  -13, 31,
+  -13, 70,
+  47, 70,
+  47, 31,
+  -13, 31
+), ncol = 2, byrow = TRUE))) %>% 
+  st_sfc(crs = 4326)
+
+points = st_point_on_surface(newrail)
+
+newproj = '+proj=eqdc +lat_0=0 +lon_0=20 +lat_1=43 +lat_2=62 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs'
+box = st_transform(box, newproj)
+newrail = st_transform(newrail, newproj)
+
+
+
+tm_shape(newrail, bbox = box) +
+  tm_polygons('percent', legend.reverse = T, title = 'Электрификация, %', colorNA = 'lightgrey', textNA = 'Нет данных', legend.format = list(text.separator = '-')) +
+tm_shape(points) +
+  tm_bubbles('all', col = 'cadetblue4', alpha = 0.5, title.size = 'Протяженность, км', scale = 2.5, legend.size.is.portrait = T) +
+tm_layout(main.title = 'Протяженность и электрификация железных дорог, 2016', fontfamily = 'Open Sans', main.title.size = 1.2, legend.outside = TRUE, legend.outside.position = 'right') +
+tm_credits(text = 'Данные: eurostat', position = c('LEFT', 'BOTTOM'))
+
+  
+```
+
