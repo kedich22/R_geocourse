@@ -1,0 +1,83 @@
+---
+title: "Class13-1"
+author: "Andrei Kedich"
+date: "01 12 2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Задание
+
+Постройте поля распределения солености и температуры методами радиальных базисных функций и обратно взвешенных расстояний с размером ячейки 50 км. Визуализируйте их средствами tmap и сравните результаты. Какой метод интерполяции дает, на ваш взгляд, более правдоподобный результат?
+
+
+```{r}
+library(tidyverse)
+library(mapview)
+library(stars)
+library(fields)
+library(stars)
+library(sf)
+library(rnaturalearth)
+library(scales)
+```
+
+```{r}
+argo = read.csv('argo.csv')
+pts = argo %>% 
+  st_as_sf(coords = c('Long', 'Lat'), crs = 4326) %>% 
+  st_transform(3857)
+```
+
+Построение сетки
+```{r}
+box = st_bbox(pts)
+grid = st_as_stars(box, dx = 200000, 200000)
+
+ggplot() +
+  geom_sf(data = st_as_sf(grid)) +
+  geom_sf(data = pts, color = 'red')
+```
+
+Интерполяция
+```{r}
+coords = st_coordinates(pts)
+coords_grid = st_coordinates(grid)
+pred_temp = Tps(coords, pts$Temp, scale.type = 'unscaled')
+
+pred_sal = Tps(coords, pts$Sal, scale.type = 'unscaled')
+
+grid = grid %>% 
+  mutate(sal = predict(pred_sal, coords_grid), temp = predict(pred_temp, coords_grid))
+
+plot(grid['temp'])
+plot(grid['sal'])
+```
+
+Визуализация
+```{r}
+sal_breaks = seq(33, 38.5, by = 0.5)
+sal_breaks = fullseq(c(min(grid[['sal']]), max(grid[['sal']])), 0.5)
+
+sal_ncolors = length(sal_breaks) - 1
+sal_colors = colorRampPalette(c('white', 'yellow', 'red', 'darkred'))(sal_ncolors)
+
+sal_contours = st_contour(grid['sal'], breaks = sal_breaks, contour_lines = TRUE)
+
+plot(sal_contours)
+
+ggplot() +
+  geom_stars(data = cut(grid['sal'], breaks = sal_breaks)) +
+scale_fill_manual(values = sal_colors,
+                  name = '‰',
+                  labels = sal_breaks,
+                  guide = guide_legend(label.vjust = -0.3, reverse = T)) +
+  geom_sf(data = sal_contours) +
+  geom_sf(data = pts) +
+  labs(title = 'Соленость по данным буев ARGO')
+```
+

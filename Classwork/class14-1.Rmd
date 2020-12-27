@@ -1,0 +1,120 @@
+---
+title: "Class 14-1"
+author: "Andrei Kedich"
+date: "08 12 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Задание:
+
+Загрузите данные дрейфующих буев ARGO на акваторию Северной Атлантики за 30 января 2010 года. Постройте поля распределения солености и температуры методом обычного кригинга с размером ячейки 50 км. Подберите подходящую модель вариограммы. Выполните визуализацию оценки кригинга и дисперсии кригинга средствами ggplot2. Произведите кросс-валидацию полученных результатов
+
+
+```{r}
+library(tidyverse)
+library(sf)
+library(stars)
+library(rnaturalearth)
+library(mapview)
+library(gstat)
+```
+```{r}
+prj = '+proj=eqdc +lat_1=15 +lat_2=45 +lon_0=-35'
+pts = read_csv('argo.csv') %>% 
+  filter(Cruise != '7900175') %>% 
+  st_as_sf(coords = c('Long', 'Lat'), crs = 4326, remove = FALSE) %>% 
+  st_transform(prj)
+
+mapview(pts)
+
+```
+
+Вариограмный анализ (соленость)
+
+```{r}
+hscat(Sal~1, data = pts, 1e5 * c(0, 10, 20, 50, 100), pch = 19)
+```
+
+Вариограмное облако
+```{r}
+varcl = variogram(Sal~1, data=pts, cutoff = 1e7, cloud=TRUE)
+plot(varcl)
+```
+
+Эмпирическая вариограмма
+```{r}
+width = 5e5
+vargr = variogram(Sal~1, data=pts, cutoff = 1e7, width = width)
+plot(vargr)
+
+varmd = fit.variogram(vargr, model = vgm(psill = 1.3, model = 'Sph', range = 3e6, nugget = 0))
+
+plot(vargr, model = varmd, cutoff = 1e7)
+```
+
+```{r}
+ocean = ne_download(scale = 50, type = 'ocean', category = 'physical', returnclass = 'sf')
+
+ocean_p = st_transform(ocean, prj)
+```
+
+Построение сетки и интерполяция 
+```{r}
+box = st_bbox(pts)
+grid = st_as_stars(box, dx = 1e5, dy =1e5)
+sal_grid = krige(Sal~1, pts, grid, model = varmd)[ocean_p]
+plot(sal_grid)
+```
+
+
+Вариограмный анализ (температура) - универсальный кригинг
+
+```{r}
+hscat(Temp~1, data = pts, 1e5 * c(0, 10, 20, 50, 100), pch = 19)
+```
+
+Вариограмное облако
+```{r}
+varcl = variogram(Temp~1, data=pts, cutoff = 1e7, cloud=TRUE)
+plot(varcl)
+```
+
+Эмпирическая вариограмма
+```{r}
+width = 5e5
+vargr = variogram(Temp~Lat, data=pts, cutoff = 5e6, width = width)
+plot(vargr)
+
+varmd = fit.variogram(vargr, model = vgm(psill = 10, model = 'Sph', range = 2.5e6, nugget = 0))
+
+plot(vargr, model = varmd, cutoff = 5e6)
+```
+
+```{r}
+ocean = ne_download(scale = 50, type = 'ocean', category = 'physical', returnclass = 'sf')
+
+ocean_p = st_transform(ocean, prj)
+```
+
+Построение сетки и интерполяция 
+```{r}
+box = st_bbox(pts)
+grid = st_as_stars(box, dx = 1e5, dy =1e5)
+
+
+lats = st_as_sf(grid, points = T) %>% 
+           st_transform(4326) %>% 
+           st_coordinates() %>% 
+           as_tibble() %>% 
+           pull(Y))
+         
+grid_lat = grid %>%  Тут проблема - не работатет
+  mutate()
+         
+temp_grid = krige(Temp~Lat, pts, grid, model = varmd)[ocean_p]
+plot(temp_grid['var1.pred'])
+plot(temp_grid['var1.var'])
